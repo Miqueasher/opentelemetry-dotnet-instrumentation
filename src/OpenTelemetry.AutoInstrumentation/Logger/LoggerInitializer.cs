@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry.AutoInstrumentation.Configurations;
 using OpenTelemetry.AutoInstrumentation.Configurations.Otlp;
 using OpenTelemetry.AutoInstrumentation.Logging;
+using OpenTelemetry.AutoInstrumentation.Plugins;
 using OpenTelemetry.Logs;
 
 namespace OpenTelemetry.AutoInstrumentation.Logger;
@@ -34,6 +35,17 @@ internal static class LoggerInitializer
     public static void AddOpenTelemetryLogsFromStartup(this ILoggingBuilder builder)
     {
         AddOpenTelemetryLogs(builder);
+    }
+
+    // Internal for testing purposes.
+    internal static void NotifyPluginsWhenLoggerProviderIsBuilt(IServiceCollection services, PluginManager pluginManager)
+    {
+        // The SDK passes the provider it is building to instrumentation factories.
+        services.ConfigureOpenTelemetryLoggerProvider(builder => builder.AddInstrumentation((_, loggerProvider) =>
+        {
+            pluginManager.InitializedProvider(loggerProvider);
+            return new PluginsNotified();
+        }));
     }
 
     private static void AddOpenTelemetryLogs(ILoggingBuilder builder)
@@ -228,6 +240,12 @@ internal static class LoggerInitializer
                     }
                 }
             });
+
+            if (pluginManager != null)
+            {
+                NotifyPluginsWhenLoggerProviderIsBuilt(builder.Services, pluginManager);
+            }
+
             _initializedAtLeastOnce = true;
 
             Logger.Information($"Logs: Loaded AddOpenTelemetry from LoggingBuilder.");
@@ -237,6 +255,11 @@ internal static class LoggerInitializer
             Logger.Error(ex, "Error in AddOpenTelemetryLogs.");
             throw;
         }
+    }
+
+    // Registered with the SDK as instrumentation only to receive the provider.
+    private sealed class PluginsNotified
+    {
     }
 }
 #endif

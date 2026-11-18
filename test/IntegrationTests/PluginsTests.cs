@@ -27,6 +27,9 @@ public class PluginsTests : TestHelper
 
         Assert.Contains(PluginInitPattern, standardOutput, StringComparison.Ordinal);
         Assert.Contains(PluginInitDonePattern, standardOutput, StringComparison.Ordinal);
+#if NET
+        Assert.Contains("Plugin.LoggerProviderInitialized() invoked.", standardOutput, StringComparison.Ordinal);
+#endif
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using OpenTelemetry.AutoInstrumentation.Configurations;
 using OpenTelemetry.AutoInstrumentation.Logging;
 using OpenTelemetry.AutoInstrumentation.PluginApi;
 using OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -121,6 +122,22 @@ internal partial class PluginManager
     public void InitializedProvider(MeterProvider meterProvider)
     {
         CallPlugins<ITelemetryPlugin>(plugin => plugin.MeterProviderInitialized(meterProvider));
+    }
+
+    public void InitializedProvider(LoggerProvider loggerProvider)
+    {
+        // Can run from the application's service provider, so a failing plugin must not break it or other plugins.
+        CallPlugins<ILoggerProviderPlugin>(plugin =>
+        {
+            try
+            {
+                plugin.LoggerProviderInitialized(loggerProvider);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Plugin '{0}' failed in {1}.", plugin.GetType().FullName, nameof(ILoggerProviderPlugin.LoggerProviderInitialized));
+            }
+        });
     }
 
     public TracerProviderBuilder BeforeConfigureTracerProviderBuilder(TracerProviderBuilder builder)

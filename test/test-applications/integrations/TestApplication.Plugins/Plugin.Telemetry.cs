@@ -4,6 +4,7 @@
 using System.Runtime.CompilerServices;
 using OpenTelemetry.AutoInstrumentation.PluginApi;
 using OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -15,7 +16,7 @@ namespace TestApplication.Plugins;
 /// <content>
 /// Telemetry extensions of the plugin.
 /// </content>
-public partial class Plugin : IPlugin, ITelemetryPlugin
+public partial class Plugin : IPlugin, ITelemetryPlugin, ILoggerProviderPlugin
 #pragma warning restore CA1515 // Consider making public types internal. Needed for AutoInstrumentation plugin loading.
 {
 #pragma warning disable CA1822 // Mark members as static. Needed for AutoInstrumentation plugin loading.
@@ -49,6 +50,13 @@ public partial class Plugin : IPlugin, ITelemetryPlugin
         ThrowIfMissing(meterProvider);
 
         Console.WriteLine($"{nameof(Plugin)}.{nameof(MeterProviderInitialized)}() invoked.");
+    }
+
+    public void LoggerProviderInitialized(LoggerProvider loggerProvider)
+    {
+        ThrowIfMissing(loggerProvider);
+
+        Console.WriteLine($"{nameof(Plugin)}.{nameof(LoggerProviderInitialized)}() invoked.");
     }
 
     public TracerProviderBuilder AfterConfigureTracerProvider(TracerProviderBuilder builder)

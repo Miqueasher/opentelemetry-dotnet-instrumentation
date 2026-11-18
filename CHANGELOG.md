@@ -10,6 +10,8 @@ This component adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Added
 
 - Support for .NET 11.
+- Added `ILoggerProviderPlugin.LoggerProviderInitialized` for plugins.
+  See [plugins documentation](./docs/plugins.md) for details.
 
 ### Changed
 

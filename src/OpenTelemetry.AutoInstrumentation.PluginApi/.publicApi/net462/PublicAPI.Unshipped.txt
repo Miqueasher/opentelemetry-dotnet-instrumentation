@@ -1,0 +1,2 @@
+OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry.ILoggerProviderPlugin
+OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry.ILoggerProviderPlugin.LoggerProviderInitialized(OpenTelemetry.Logs.LoggerProvider! loggerProvider) -> void

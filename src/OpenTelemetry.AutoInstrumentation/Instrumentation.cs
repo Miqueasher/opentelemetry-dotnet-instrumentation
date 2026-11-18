@@ -256,11 +256,11 @@ internal static class Instrumentation
             var createLoggerProviderBuilderMethod = typeof(Sdk).GetMethod("CreateLoggerProviderBuilder", BindingFlags.Static | BindingFlags.NonPublic)!;
             var loggerProviderBuilder = createLoggerProviderBuilderMethod.Invoke(null, null) as LoggerProviderBuilder;
 
-            // TODO: plugins support
             var loggerProvider = loggerProviderBuilder!
                 .SetResourceBuilder(ResourceConfigurator.CreateResourceBuilder(ResourceSettings.Value))
                 .UseEnvironmentVariables(LazyInstrumentationLoader, LogSettings.Value, _pluginManager!)
                 .Build();
+            _pluginManager!.InitializedProvider(loggerProvider);
             Logger.Information("OpenTelemetry logger provider initialized.");
             return loggerProvider;
         }

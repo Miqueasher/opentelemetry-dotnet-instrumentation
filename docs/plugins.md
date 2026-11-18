@@ -118,6 +118,48 @@ for these builder-returning and resource-returning hooks.
 `TracerProviderInitialized` and `MeterProviderInitialized` are called on every
 configured plugin implementing `ITelemetryPlugin`.
 
+Implement `ILoggerProviderPlugin` to access the logger providers.
+
+```csharp
+using OpenTelemetry.AutoInstrumentation.PluginApi;
+using OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry;
+using OpenTelemetry.Logs;
+
+public class MyLoggerProviderPlugin : IPlugin, ILoggerProviderPlugin
+{
+    public void Initializing()
+    {
+    }
+
+    public void Initialized()
+    {
+    }
+
+    public void LoggerProviderInitialized(LoggerProvider loggerProvider)
+    {
+        // Store the provider and use it later, for example to call ForceFlush.
+    }
+}
+```
+
+`LoggerProviderInitialized` is called on every configured plugin implementing
+`ILoggerProviderPlugin`, once for each logger provider built by automatic
+instrumentation:
+
+* the provider shared by the log bridges, built when a bridge is first used;
+* on .NET, one for each `ILoggingBuilder` configured by automatic
+  instrumentation, built when the application's service provider first needs
+  it.
+
+Both can happen after `IPlugin.Initialized`, on any thread. For
+`ILoggingBuilder`, the callback runs while the provider is still being built:
+it has no processors yet, so calling `ForceFlush` or configuring it in the
+callback has no effect. Store the provider and use it later. If the build
+fails, the provider is disposed. The callback must return promptly and must
+not resolve services. A provider can be disposed by the application while the
+plugin still holds it. Exceptions thrown by `LoggerProviderInitialized` are
+logged and do not stop other plugins from being called.
+
 ## Signal options customization
 
 Implement the generic options interfaces for each supported options type that

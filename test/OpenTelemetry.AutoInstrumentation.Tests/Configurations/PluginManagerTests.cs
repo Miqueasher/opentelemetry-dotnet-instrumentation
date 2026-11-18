@@ -3,9 +3,15 @@
 
 using System.Collections.Specialized;
 using System.Reflection;
+#if NET
+using Microsoft.Extensions.DependencyInjection;
+#endif
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenTelemetry.AutoInstrumentation.Configurations;
+#if NET
+using OpenTelemetry.AutoInstrumentation.Logger;
+#endif
 using OpenTelemetry.AutoInstrumentation.PluginApi;
 using OpenTelemetry.AutoInstrumentation.PluginApi.Telemetry;
 using OpenTelemetry.AutoInstrumentation.Plugins;
@@ -164,6 +170,7 @@ public class PluginManagerTests
     {
         var tracerProviderMock = Substitute.For<TracerProvider>();
         var meterProviderMock = Substitute.For<MeterProvider>();
+        var loggerProviderMock = Substitute.For<LoggerProvider>();
 
         var pluginAssemblyQualifiedName = typeof(MockPlugin).AssemblyQualifiedName!;
         var settings = GetSettings(pluginAssemblyQualifiedName);
@@ -172,6 +179,7 @@ public class PluginManagerTests
         Assert.Null(Record.Exception(() => pluginManager.Initializing()));
         Assert.Null(Record.Exception(() => pluginManager.InitializedProvider(tracerProviderMock)));
         Assert.Null(Record.Exception(() => pluginManager.InitializedProvider(meterProviderMock)));
+        Assert.Null(Record.Exception(() => pluginManager.InitializedProvider(loggerProviderMock)));
         Assert.Null(Record.Exception(() => pluginManager.Initialized()));
 
         var plugin = pluginManager.Plugins
@@ -183,8 +191,44 @@ public class PluginManagerTests
         Assert.True(plugin.IsInitializingCalled);
         Assert.True(plugin.IsTracerProviderInitializedCalled);
         Assert.True(plugin.IsMeterProviderInitializedCalled);
+        Assert.True(plugin.IsLoggerProviderInitializedCalled);
         Assert.True(plugin.IsInitializedCalled);
     }
+
+    [Fact]
+    public void LoggerProviderInitializedExceptionDoesNotStopOtherPlugins()
+    {
+        var settings = GetSettings($"{typeof(PluginWithThrowingLoggerProviderInitialized).AssemblyQualifiedName}:{typeof(MockPlugin).AssemblyQualifiedName}");
+        var pluginManager = new PluginManager(settings);
+        var loggerProviderMock = Substitute.For<LoggerProvider>();
+
+        Assert.Null(Record.Exception(() => pluginManager.InitializedProvider(loggerProviderMock)));
+
+        var plugin = (MockPlugin)pluginManager.Plugins.Single(x => x.Type == typeof(MockPlugin)).Instance;
+        Assert.True(plugin.IsLoggerProviderInitializedCalled);
+    }
+
+#if NET
+    [Fact]
+    public void LoggerProviderInitializedIsCalledWhenLoggingBuilderProviderIsBuilt()
+    {
+        var pluginManager = new PluginManager(GetSettings(typeof(MockPlugin).AssemblyQualifiedName!));
+        var services = new ServiceCollection();
+        services.AddLogging(builder =>
+        {
+            builder.AddOpenTelemetry();
+            LoggerInitializer.NotifyPluginsWhenLoggerProviderIsBuilt(builder.Services, pluginManager);
+        });
+        var plugin = (MockPlugin)pluginManager.Plugins.Single().Instance;
+
+        using var serviceProvider = services.BuildServiceProvider();
+        Assert.False(plugin.IsLoggerProviderInitializedCalled);
+
+        _ = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Test");
+
+        Assert.True(plugin.IsLoggerProviderInitializedCalled);
+    }
+#endif
 
     [Fact]
     public void ConfigureLogsOptionsSuccess()
@@ -240,6 +284,7 @@ public class PluginManagerTests
 #pragma warning disable CA1034 // Nested types should not be visible. It is used only for test purposes.
     public class MockPlugin : IPlugin,
         ITelemetryPlugin,
+        ILoggerProviderPlugin,
         IConfigureLogsOptions<OpenTelemetryLoggerOptions>
 #pragma warning restore CA1034 // Nested types should not be visible. It is used only for test purposes.
 #pragma warning restore CA1515 // Consider making public types internal. Needed for plugin purposes.
@@ -251,6 +296,8 @@ public class PluginManagerTests
         public bool IsTracerProviderInitializedCalled { get; private set; }
 
         public bool IsMeterProviderInitializedCalled { get; private set; }
+
+        public bool IsLoggerProviderInitializedCalled { get; private set; }
 
         public void Initializing()
         {
@@ -290,6 +337,16 @@ public class PluginManagerTests
             }
 
             IsMeterProviderInitializedCalled = true;
+        }
+
+        public void LoggerProviderInitialized(LoggerProvider loggerProvider)
+        {
+            if (IsLoggerProviderInitializedCalled)
+            {
+                throw new InvalidOperationException("Already called");
+            }
+
+            IsLoggerProviderInitializedCalled = true;
         }
 
 #pragma warning disable CA1822 // Mark members as static. It is needed for plugin purposes.
@@ -440,6 +497,26 @@ public class PluginManagerTests
         public MockPluginMissingDefaultConstructor(string ignored)
         {
             throw new InvalidOperationException("this plugin is not expected to be successfully constructed");
+        }
+    }
+
+#pragma warning disable CA1515 // Consider making public types internal. Needed for plugin purposes.
+#pragma warning disable CA1034 // Nested types should not be visible. It is used only for test purposes.
+    public class PluginWithThrowingLoggerProviderInitialized : IPlugin, ILoggerProviderPlugin
+#pragma warning restore CA1034 // Nested types should not be visible. It is used only for test purposes.
+#pragma warning restore CA1515 // Consider making public types internal. Needed for plugin purposes.
+    {
+        public void Initialized()
+        {
+        }
+
+        public void Initializing()
+        {
+        }
+
+        public void LoggerProviderInitialized(LoggerProvider loggerProvider)
+        {
+            throw new InvalidOperationException("Plugin callback failed.");
         }
     }
 
